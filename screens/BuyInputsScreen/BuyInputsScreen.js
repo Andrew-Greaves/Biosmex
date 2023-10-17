@@ -1,6 +1,6 @@
 import React, { useEffect,useState } from 'react';
 import PropTypes from 'prop-types';
-import { View, StyleSheet,Image,ScrollView,TouchableOpacity,StatusBar,FlatList,Modal } from 'react-native';
+import { View, StyleSheet,Image,ScrollView,TouchableOpacity,StatusBar,FlatList,Modal,ActivityIndicator } from 'react-native';
 import { Text,Input,Icon,Button,SearchBar } from '@rneui/themed';
 import { useNavigation } from '@react-navigation/native';
 import Header from '../../components/Header/Header';
@@ -9,64 +9,65 @@ import base64 from 'react-native-base64';
 import CartModal from '../../components/Modal/CartModal';
 
 
+
+
  //Product Categories
  const categories = [  
       {    
         name: 'Integrated Packet',    
-        subcategories: []
+        subcategories: [
+          {
+            name:'Integrated Packet'
+          }
+        ]
     },
     {
-      name: 'Crop Protection',
+      name: 'Insumos Agricolas',
       subcategories: [
         {
           name: 'Adjuvants',
           subcategories: []
         },
         {
-          name: 'Insumos',
+          name: 'Insumos biológicos',
           subcategories: [
             {
-              name: 'Insumos biológicos',
-              subcategories: [
-                {
-                  name: 'Herbicidas',
-                  subcategories: []
-                },
-                {
-                  name: 'Insecticidas',
-                  subcategories: []
-                },
-                {
-                  name: 'Fungicidas',
-                  subcategories: []
-                },
-              ]
+              name: 'Herbicidas',
+              subcategories: []
             },
             {
-              name: 'Insumos químicos',
-              subcategories: [
-                {
-                  name: 'Herbicidas',
-                  subcategories: []
-                },
-                {
-                  name: 'Insecticidas',
-                  subcategories: []
-                },
-                {
-                  name: 'Fungicidas',
-                  subcategories: []
-                },
-              ]
+              name: 'Insecticidas',
+              subcategories: []
             },
+            {
+              name: 'Fungicidas',
+              subcategories: []
+            },
+            ]
+          },
+          {
+            name: 'Insumos químicos',
+            subcategories: [
+              {
+                name: 'Herbicidas',
+                subcategories: []
+              },
+              {
+                name: 'Insecticidas',
+                subcategories: []
+              },
+              {
+                name: 'Fungicidas',
+                subcategories: []
+              },
+            ]
+          },
           {
             name: 'Bioestimulantes',
             subcategories: []
           }
         ]
       },
-    ],
-  },
   {
     name: 'Crop Nutrition',
     subcategories: [
@@ -117,11 +118,28 @@ import CartModal from '../../components/Modal/CartModal';
         subcategories: []
       }
     ],
+  },
+  {
+    name: 'Animal Health',
+    subcategories: [
+      {
+        name:'Animal Health'
+      }
+    ],
+  },
+  {
+    name: 'Animal Feed',
+    subcategories: [
+      {
+        name:'Animal Feed'
+      }
+    ],
   }
 ];
   
 
 const BuyInputsScreen = () => {
+  const [loading, setLoading] = useState(true);
   //Connect to Odoo Database
   const baseUrl = 'http://biosmex.odoo.com:80';
   const db = 'biosmex-biosmex-production-7962955';
@@ -195,13 +213,17 @@ const BuyInputsScreen = () => {
             },
           },
         );
-        setProducts(response.data.result.records.map(record => ({
-          ...record,
-          image_128: `data:image/png;base64,${record.image_128}`, // add prefix to base64 string
-          list_price: Number(record.list_price).toFixed(2), // format list_price to two decimal places
-        })));
+        setProducts(
+          response.data.result.records.map(record => ({
+            ...record,
+            image_128: `data:image/png;base64,${record.image_128}`, // add prefix to base64 string
+            list_price: Number(record.list_price).toFixed(2), // format list_price to two decimal places
+          })),
+        );
       } catch (error) {
         console.error(error);
+      } finally {
+        setLoading(false); // hide the loading icon when data is fetched or there's an error
       }
     };
   
@@ -219,8 +241,9 @@ const BuyInputsScreen = () => {
   const [quantity,setQuantity]=useState(1);
   const [cartItems, setCartItems] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  
+  
 
-  // const [selectedCategorys, setSelectedCategorys] = useState(null);
   const [showSubcategories, setShowSubcategories] = useState(false);
 
   const navigation = useNavigation();
@@ -268,7 +291,6 @@ const BuyInputsScreen = () => {
     } else {
       // Construct the category path and filter products
       const categoryPath = constructCategoryPath(subcategory);
-      console.log(categoryPath);
       handleCategoryFilter(categoryPath);
     }
   };
@@ -290,9 +312,29 @@ const BuyInputsScreen = () => {
       return path;
     };
 
+    //Function to display current path
+    const constructSubCategoryPath = (subcategory) => {
+      let path = subcategory.name;
+      let current = subcategory;
+
+      // Traverse up to the root category
+      while (current.parent) {
+        path = `${current.parent.name} / ${path}`;
+        current = current.parent;
+      }
+
+      return path;
+    };
+
     const handleCategoryPress = (category) => {
-      setSelectedCategory(category);
-      setShowSubcategories(true);
+      if (category.subcategories && category.subcategories.length > 0) {
+        setSelectedCategory(category);
+        setShowSubcategories(true);
+      } else {
+        // Construct the category path and filter products
+        const categoryPath = constructCategoryPath(category);
+        handleCategoryFilter(categoryPath);
+      }
     };
 
     const handleBackPress = () => {
@@ -303,17 +345,18 @@ const BuyInputsScreen = () => {
 
      //FILTER BY CATEGORY
      const handleCategoryFilter = (category) => {
-      setSelectedCategory(category);
-      let filtered;
-      if (Array.isArray(products)) {
-        filtered = products.filter((product) => category === 'all' || product.categ_id[1] === category);
-      }
-      console.log(filtered);
-      if (filtered !== undefined) {
+      if (category === 'all') {
+        // Show all products
+        setFilteredProducts(products);
+      } else {
+        // Filter products based on selected category
+        const filtered = products.filter(product => {
+          const categ = product.categ_id[1];
+          return categ === category || categ.startsWith(category + '/');
+        });
         setFilteredProducts(filtered);
       }
     };
-
     // FILTER BY SEARCH
    const [searchQuery, setSearchQuery] = useState('');
    
@@ -334,27 +377,36 @@ const BuyInputsScreen = () => {
    const handleProductPress = (product) => {
     setSelectedProduct(product);
     setModalVisible(true);
-};
+  };
 
-const addToCart = (product, quantity) => {
-  const existingItem = cartItems.find(item => item.product.id === product.id);
+  const addToCart = (product, quantity) => {
+    const existingItem = cartItems.find(item => item.product.id === product.id);
 
-  if (existingItem) {
-    // If the item is already in the cart, update the quantity
-    const updatedItem = { product, quantity: existingItem.quantity + quantity };
-    const updatedCartItems = cartItems.map(item => item.product.id === product.id ? updatedItem : item);
-    setCartItems(updatedCartItems);
-  } else {
-    // If the item is not in the cart, add it
-    const newItem = { product, quantity };
-    const updatedCartItems = [...cartItems, newItem];
-    setCartItems(updatedCartItems);
-  }
-};
+    if (existingItem) {
+      // If the item is already in the cart, update the quantity
+      const updatedItem = { product, quantity: existingItem.quantity + quantity };
+      const updatedCartItems = cartItems.map(item => item.product.id === product.id ? updatedItem : item);
+      setCartItems(updatedCartItems);
+    } else {
+      // If the item is not in the cart, add it
+      const newItem = { product, quantity };
+      const updatedCartItems = [...cartItems, newItem];
+      setCartItems(updatedCartItems);
+    }
+  };
 
-  const removeFromCart = (productId) => {
-    const updatedCartItems = cartItems.filter(item => item.product.id !== productId);
-    setCartItems(updatedCartItems);
+  const removeFromCart = (productId, quantity = 1) => {
+    const index = cartItems.findIndex(item => item.product.id === productId);
+    if (index !== -1) {
+      const newCartItems = [...cartItems];
+      const item = newCartItems[index];
+      if (item.quantity > quantity) {
+        item.quantity -= quantity;
+      } else {
+        newCartItems.splice(index, 1);
+      }
+      setCartItems(newCartItems);
+    }
   };
 
 
@@ -362,46 +414,34 @@ const addToCart = (product, quantity) => {
         <View style={styles.view}>
             <StatusBar backgroundColor={"white"} barStyle={"dark-content"} />
             <View style={{flexDirection:"row", width:"100%",justifyContent:"space-between",padding:16}}>
-                    <TouchableOpacity onPress={() => setCartModalVisible(true)}>
-                        <Icon type= 'material-community' size={20} name= 'cart' containerStyle={{borderWidth:1,borderRadius:10,padding:12,backgroundColor:"#D3D3D3"}}/>
-                    </TouchableOpacity>
-                     {/* Render the CartModal component */}
-                    <CartModal cartItems={cartItems} removeFromCart={removeFromCart} modalVisible={cartmodalVisible} setModalVisible={setCartModalVisible} />
-                    {/* Home Button */}
-                    <TouchableOpacity onPress={() => navigation.navigate("Home")}>
-                        <Icon type= 'material-community' size={20} name= 'home' containerStyle={{borderWidth:1,borderRadius:10,padding:12,backgroundColor:"#D3D3D3"}}/>
-                    </TouchableOpacity>
-                    <Header />
-                </View>
+              <Header />
+              {/* Home Button */}
+              <TouchableOpacity onPress={() => navigation.navigate("Home")}>
+                  <Icon type= 'material-community' size={25} name= 'home' containerStyle={{borderWidth:1,borderRadius:10,padding:12,backgroundColor:"#D3D3D3"}}/>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => setCartModalVisible(true)}>
+                  <Icon type= 'material-community' size={25} name= 'cart' containerStyle={{borderWidth:1,borderRadius:10,padding:12,backgroundColor:"#D3D3D3"}}/>
+              </TouchableOpacity>
+                {/* Render the CartModal component */}
+              <CartModal cartItems={cartItems} removeFromCart={removeFromCart} modalVisible={cartmodalVisible} setModalVisible={setCartModalVisible} addToCart={addToCart} setCartItems={setCartItems} />
+                    
+            </View>
             <ScrollView showsVerticalScrollIndicator={false}>
                 {/* VIEW FOR SEARCHBAR  */}
                 <View style={{alignItems:"center",}}>
                     <SearchBar lightTheme={true} placeholder="Search Products..." onChangeText={handleSearch} value={searchQuery} 
-                    containerStyle={{width:'90%',marginTop:20}}/>
+                    containerStyle={{width:'90%',marginTop:10}}/>
                 </View>
                 <View style={{padding:16}}>
                   {/* Text displaying the category section title */}
-                    <Text style={{fontSize:18,fontWeight:500,letterSpacing:1, marginTop:20}}>Shop by Category</Text>
-                    <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingTop:20,flexWrap:"wrap",}}>
+                    <Text style={{fontSize:18,fontWeight:500,letterSpacing:1}}>Shop by Category</Text>
+
+                    <Text style={styles.categoryText}>{constructSubCategoryPath(selectedCategory)}</Text>
+
+
+                    <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingTop:10,flexWrap:"wrap",}}>
                     {/* if showSubcategories is true, display subcategories */}
-                        {showSubcategories ? ( 
-                        <>
-                          <View style={{alignItems:"center",justifyContent:"center"}}>
-                            {/* Button to go back to parent category */}
-                            <TouchableOpacity onPress={handleBackPress}>
-                              <Text style={styles.categoryButton}>Back</Text>
-                            </TouchableOpacity>
-                          </View>
-                            {/* Display subcategory buttons */}
-                          {selectedCategory.subcategories.map((subcategory) => (
-                            <SubcategoryButton 
-                              key={subcategory.name} 
-                              subcategory={subcategory} 
-                              onPress={() => handleSubcategoryPress(subcategory)} // added onPress prop
-                            />
-                          ))}
-                        </>
-                      ) : (
+                      {!showSubcategories ? (
                         // Display category buttons
                         <>
                           {categoriesWithParentRefs.map((category) => (
@@ -412,15 +452,33 @@ const addToCart = (product, quantity) => {
                             />
                           ))}
                         </>
+                      ) : (
+                        <>
+                          {/* Display subcategory buttons */}
+                          {selectedCategory.subcategories.map((subcategory) => (
+                            <SubcategoryButton 
+                              key={subcategory.name} 
+                              subcategory={subcategory} 
+                              onPress={() => handleSubcategoryPress(subcategory)} // added onPress prop
+                            />
+                          ))}
+                          <View style={{alignItems:"center",justifyContent:"center"}}>
+                            {/* Button to go back to parent category */}
+                            <TouchableOpacity onPress={handleBackPress}>
+                              <Text style={styles.categoryBackButton}>Back</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </>
                       )}
                     </View>
                     
                 </View>
-                <View style={{flexDirection:"row", marginTop:20,alignItems:"center",justifyContent:"space-between",padding:16}}>
+                <View style={{flexDirection:"row",alignItems:"center",justifyContent:"space-between",padding:16}}>
                     <View style={{flexDirection:"row",alignItems:"center"}}>
                         <Text style={{fontSize:18,fontWeight:500,letterSpacing:1}}>Products</Text>
+                        <Text style={{fontSize:18,fontWeight:400,marginLeft:10}}>{filteredProducts.length}</Text>
                     </View>
-                    <TouchableOpacity onPress={() => handleCategoryFilter("all")}>
+                    <TouchableOpacity onPress={() => {handleBackPress(); handleCategoryFilter("all")}}>
                         <Text style={{fontSize:14,color:"blue",fontWeight:400}}>See All</Text>
                     </TouchableOpacity>
                 </View>
@@ -475,49 +533,60 @@ const addToCart = (product, quantity) => {
                     </View>
                   </View>
                 </Modal>
-                {
-                  filteredProducts && filteredProducts.length > 0 && filteredProducts.map((product, index) => (
-                    // Use modulus to find every second product
-                    // Then, pair it with the previous product and wrap them in a View
-                    index % 2 === 0 ? (
-                      <View style={styles.productRow} key={product.id}>
-                        <View style={styles.productItem} key={product.id}>
-                          <TouchableOpacity onPress={() => handleProductPress(product)}>
-                            <Image source={{ uri: product.image_128 }} style={{ width: 100, height: 100 }} />
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleProductPress(product)}>
-                            <Text style={styles.productName}>{product.name}</Text>
-                          </TouchableOpacity>
-                          <Text style={styles.price}>${product.list_price}</Text>
-                          <TouchableOpacity style={styles.addToCartButton} onPress={() => addToCart(product,1)}>
-                            <Text style={{ color: '#fff' }}>Add to cart</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {
-                          // Check if there's a next product to pair with the current one
-                          filteredProducts[index + 1] ? (
-                            <View style={styles.productItem} key={filteredProducts[index + 1].id}>
-                              <TouchableOpacity onPress={() => handleProductPress(filteredProducts[index + 1])}>
-                                <Image source={{ uri: filteredProducts[index + 1].image_128 }} style={{ width: 100, height: 100 }} />
-                              </TouchableOpacity>
-                              <TouchableOpacity onPress={() => handleProductPress(filteredProducts[index + 1])}>
-                                <Text style={styles.productName}>{filteredProducts[index + 1].name}</Text>
-                              </TouchableOpacity>
-                              <Text style={styles.price}>${filteredProducts[index + 1].list_price}</Text>
-                              <TouchableOpacity style={styles.addToCartButton} onPress={() => addToCart(filteredProducts[index + 1],1)}>
-                                <Text style={{ color: '#fff' }}>Add to cart</Text>
-                              </TouchableOpacity>
-                            </View>
-                          ) : null
-                        }
+                <View style={{ flex: 1 }}>
+                  {loading ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color="#404343" />
+                        <Text style={styles.loadingText}>Loading Products</Text>
                       </View>
-                    ) : null
-                  ))
-                }
+                    ) : (
+                  <View style={{ paddingHorizontal: 10 }}>
+                    {
+                    filteredProducts && filteredProducts.map((product, index) => (
+                      // Use modulus to find every second product
+                      // Then, pair it with the previous product and wrap them in a View
+                      index % 2 === 0 ? (
+                        <View style={styles.productRow} key={product.id}>
+                          <View style={styles.productItem} key={product.id}>
+                            <TouchableOpacity onPress={() => handleProductPress(product)}>
+                              <Image source={{ uri: product.image_128 }} style={{ width: 100, height: 100 }} />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => handleProductPress(product)}>
+                              <Text style={styles.productName}>{product.name}</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.price}>${product.list_price}</Text>
+                            <TouchableOpacity style={styles.addToCartButton} onPress={() => addToCart(product,1)}>
+                              <Text style={{ color: '#fff' }}>Add to cart</Text>
+                            </TouchableOpacity>
+                          </View>
+                          {
+                            // Check if there's a next product to pair with the current one
+                            filteredProducts[index + 1] ? (
+                              <View style={styles.productItem} key={filteredProducts[index + 1].id}>
+                                <TouchableOpacity onPress={() => handleProductPress(filteredProducts[index + 1])}>
+                                  <Image source={{ uri: filteredProducts[index + 1].image_128 }} style={{ width: 100, height: 100 }} />
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => handleProductPress(filteredProducts[index + 1])}>
+                                  <Text style={styles.productName}>{filteredProducts[index + 1].name}</Text>
+                                </TouchableOpacity>
+                                <Text style={styles.price}>${filteredProducts[index + 1].list_price}</Text>
+                                <TouchableOpacity style={styles.addToCartButton} onPress={() => addToCart(filteredProducts[index + 1],1)}>
+                                  <Text style={{ color: '#fff' }}>Add to cart</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ) : null
+                          }
+                        </View>
+                      ) : null
+                    ))
+                  }
+                  </View>
+                    )}
+                </View>
               </View>
             </ScrollView>     
         </View>
-        
+
 )};
 
 const styles=StyleSheet.create({
@@ -544,11 +613,31 @@ const styles=StyleSheet.create({
     height:40,
     borderWidth:2,
     borderRadius:10,
-    borderColor:"#46D17E",
+    backgroundColor: "#F9B712",
     fontWeight:600,
     textAlign: 'center',
-    paddingTop:5,
-    
+    paddingTop:10,
+    overflow: 'hidden',
+    borderColor:'#F9B712',
+    color: '#fff' 
+  },
+  categoryBackButton:{
+    marginBottom:10,
+    width:170,
+    height:40,
+    borderWidth:2,
+    borderRadius:10,
+    fontWeight:600,
+    textAlign: 'center',
+    paddingTop:10,
+    overflow: 'hidden',
+    backgroundColor: "#404343",
+    borderColor:'#404343',
+    color: '#fff'
+  },
+  categoryText:{
+    fontSize: 16,
+    color: '#888',
   },
   productName: {
     fontSize: 18,
@@ -607,7 +696,7 @@ const styles=StyleSheet.create({
     elevation: 5
   },
   openButton: {
-    backgroundColor: "#F194FF",
+    backgroundColor: "#404343",
     borderRadius: 20,
     padding: 10,
     elevation: 2,
@@ -643,7 +732,7 @@ const styles=StyleSheet.create({
     paddingRight:15
   },
   addButton: {
-    backgroundColor: "#46D17E",
+    backgroundColor: "#94BF17",
     borderRadius: 20,
     padding: 10,
     elevation: 2,
@@ -655,11 +744,21 @@ const styles=StyleSheet.create({
     bottom: 0,
     width: '100%',
     height: 30,
-    backgroundColor: '#46D17E',
+    backgroundColor: '#94BF17',
     borderRadius: 5,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom:10
+  },
+  loadingText: {
+    marginTop: 20,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 
 })

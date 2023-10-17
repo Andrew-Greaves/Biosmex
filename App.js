@@ -4,6 +4,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { createTheme, Text, ThemeProvider } from "@rneui/themed";
 import MainStackNavigator from './navigator/MainStackNavigator/MainStackNavigator';
+import { Provider } from 'react-redux';
+import Store from './components/Redux/Store';
 
 
 const theme = createTheme({
@@ -18,6 +20,7 @@ const theme = createTheme({
 
 export default function App() {
   return (
+    <Provider store={Store}>
       <SafeAreaProvider>
         <NavigationContainer>
           <ThemeProvider theme={theme}>
@@ -25,7 +28,7 @@ export default function App() {
           </ThemeProvider>
         </NavigationContainer>
       </SafeAreaProvider>
-    
+    </Provider>
   );
 }
 
